@@ -2,6 +2,9 @@
 
 A Python Selenium project that scrapes stories from the Infinite Worlds app, automatically navigating through pages and saving content to JSON files with downloaded images.
 
+![image](https://github.com/user-attachments/assets/887b58d5-d118-42c0-86d7-d247b03bbd90)
+
+
 ## Features
 
 - **Story Management**: Select existing stories or create new ones
