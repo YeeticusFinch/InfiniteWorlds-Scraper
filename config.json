@@ -1,0 +1,10 @@
+{
+  "auto_continue": true,
+  "wait_time": 2,
+  "max_pages": 300,
+  "download_images": true,
+  "max_image_swaps": 12,
+  "image_swap_wait": 0.5,
+  "email": "example@gmail.com",
+  "password": "password"
+}
