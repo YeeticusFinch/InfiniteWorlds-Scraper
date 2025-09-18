@@ -19,6 +19,7 @@ import hashlib
 class InfiniteWorldsScraper:
     def __init__(self):
         self.driver = None
+        self.actions = None
         self.config = self.load_config()
         self.stories_folder = "stories"
         self.images_folder = "images"
@@ -29,6 +30,7 @@ class InfiniteWorldsScraper:
         config_file = "config.json"
         default_config = {
             "auto_continue": False,
+            "manual_next_page": False,
             "wait_time": 3,
             "max_pages": 100,
             "download_images": True,
@@ -493,93 +495,129 @@ class InfiniteWorldsScraper:
                 return False
             
             # Wait for page to fully load
-            time.sleep(8)
-            
-            # Step 1: Find and click "Play now" button
+            loaded = False
             print("Looking for 'Play now' button...")
-            play_now_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Play now')]")
+            while loaded == False:
+                time.sleep(2)
+                
+                # Step 1: Find and click "Play now" button
+                play_now_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Play now')]")
+                
+                #if not play_now_elements:
+                    #print("Could not find 'Play now' button, checking if already logged in...")
+                    #return True  # Might already be logged in
+                if play_now_elements:
+                    # Click the "Play now" button
+                    play_button = self.find_clickable_parent(play_now_elements[0])
+                    
+                    print("Clicking 'Play now' button...")
+                    if not self.safe_click_element(play_button):
+                        print("Failed to click 'Play now' button")
+                        return False
+                    loaded = True
+                    break
             
-            if not play_now_elements:
-                print("Could not find 'Play now' button, checking if already logged in...")
-                return True  # Might already be logged in
-            
-            # Click the "Play now" button
-            play_button = self.find_clickable_parent(play_now_elements[0])
-            
-            print("Clicking 'Play now' button...")
-            if not self.safe_click_element(play_button):
-                print("Failed to click 'Play now' button")
-                return False
+            loaded = False
             
             # Step 2: Wait for popup to appear
             print("Waiting for login popup...")
-            time.sleep(5)
             
-            # Step 3: Find and click "Yes, log me in please"
-            print("Looking for 'Yes, log me in please' text...")
-            login_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Yes, log me in please!')]")
+            while loaded == False:
+                time.sleep(2)
+                
+                # Step 3: Find and click "Yes, log me in please"
+                print("Looking for 'Yes, log me in please' text...")
+                login_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Yes, log me in please!')]")
+                
+                #if not login_elements:
+                    #print("Could not find 'Yes, log me in please' text")
+                    #return False
+                if login_elements:
+                    # Find the clickable parent (button containing the span)
+                    login_button = self.find_clickable_parent(login_elements[0])
+                    
+                    print("Clicking 'Yes, log me in please'...")
+                    if not self.safe_click_element(login_elements[0]):
+                        print("Failed to click 'Yes, log me in please'")
+                        return False
+                    loaded = True
+                    break
             
-            if not login_elements:
-                print("Could not find 'Yes, log me in please' text")
-                return False
-            
-            # Find the clickable parent (button containing the span)
-            login_button = self.find_clickable_parent(login_elements[0])
-            
-            print("Clicking 'Yes, log me in please'...")
-            if not self.safe_click_element(login_button):
-                print("Failed to click 'Yes, log me in please'")
-                return False
+            loaded = False
             
             # Step 4: Wait for login form to appear
             print("Waiting for login form...")
-            time.sleep(5)
             
-            # Step 5: Fill in email field
-            print("Looking for email field...")
-            email_field = self.find_input_field("email")
+            email_filled = False
+            pass_filled = False
             
-            if email_field:
-                print("Filling email field...")
-                if not self.safe_input_text(email_field, email):
-                    print("Failed to fill email field")
-                    return False
-            else:
-                print("Could not find email field")
-                return False
+            while loaded == False or email_filled == False or pass_filled == False:
+                time.sleep(2)
+                
+                if email_filled == False:
+                    # Step 5: Fill in email field
+                    print("Looking for email field...")
+                    email_field = self.find_input_field("email")
+                    
+                    if email_field:
+                        print("Filling email field...")
+                        if not self.safe_input_text(email_field, email):
+                            print("Failed to fill email field")
+                            return False
+                        email_filled = True
+                    else:
+                        continue
+                
+                if pass_filled == False:
+                    # Step 6: Fill in password field
+                    print("Looking for password field...")
+                    password_field = self.find_input_field("password")
+                    
+                    if password_field:
+                        print("Filling password field...")
+                        if not self.safe_input_text(password_field, password):
+                            print("Failed to fill password field")
+                            return False
+                        pass_filled = True
+                        loaded = True
+                    else:
+                        #print("Could not find password field")
+                        continue
+                
+                if email_filled and pass_filled:
+                    loaded = True
+                    break
             
-            # Step 6: Fill in password field
-            print("Looking for password field...")
-            password_field = self.find_input_field("password")
-            
-            if password_field:
-                print("Filling password field...")
-                if not self.safe_input_text(password_field, password):
-                    print("Failed to fill password field")
-                    return False
-            else:
-                print("Could not find password field")
-                return False
-            
+            loaded = False
             # Step 7: Click "Log In" button
             print("Looking for 'Log In' button...")
-            login_submit_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Log In')]")
             
-            if not login_submit_elements:
-                print("Could not find 'Log In' button")
-                return False
-            
-            # Find the clickable parent
-            login_submit_button = self.find_clickable_parent(login_submit_elements[0])
-            
-            print("Clicking 'Log In' button...")
-            if not self.safe_click_element(login_submit_button):
-                print("Failed to click 'Log In' button")
-                return False
+            while loaded == False:
+                time.sleep(1)
+                login_submit_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Log In')]")
+                
+                if not login_submit_elements:
+                    print("Could not find 'Log In' button")
+                    continue
+                else:
+                    # Find the clickable parent
+                    
+                    
+                    
+                    login_submit_button = self.find_clickable_parent(login_submit_elements[0])
+                    
+                    print("Clicking 'Log In' button...")
+                    if not self.safe_click_element(login_submit_button):
+                        print("Failed to click 'Log In' button")
+                        return False
+                    loaded = True
+                    break
             
             # Step 8: Wait for login to complete
             print("Waiting for login to complete...")
-            time.sleep(8)
+            loaded = False
+            
+            time.sleep(3)
             
             print("Login sequence completed successfully!")
             return True
@@ -596,6 +634,30 @@ class InfiniteWorldsScraper:
         # Setup
         story_name = self.select_story()
         self.story_data = self.load_story_data(story_name)
+        
+        print("== What do you want to do? ==")
+        print("  1. Scrape from InfiniteWorlds")
+        print("  2. Sort the story file")
+        print("  3. Run the story viewer web app")
+        print("  4. Quit")
+            
+        while True:
+            try:
+                choice = input(f"\nSelect option (1-4): ").strip()
+                choice_num = int(choice)
+                    
+                if choice_num == 1:
+                    break
+                elif choice_num == 2:
+                    self.sort_story_pages(story_name)
+                elif choice_num == 4:
+                    return
+                else:
+                    print("Invalid choice. Please try again.")
+            except ValueError:
+                print("Please enter a valid number.")
+            
+            input 
         
         if not self.setup_driver():
             return
@@ -645,10 +707,13 @@ class InfiniteWorldsScraper:
                     # Save after each page
                     self.save_story_data(story_name, self.story_data)
                 
-                # Try to find next button
-                if not self.find_next_button():
-                    print("No more pages to scrape (no 'Next turn' button found)")
-                    break
+                if not self.config.get("manual_next_page", False):
+                    # Try to find next button
+                    if not self.find_next_button():
+                        print("No more pages to scrape (no 'Next turn' button found)")
+                        break
+                else:
+                    print("Manual Next Turn disabled, please go to your next page")
                 
                 page_count += 1
                 
@@ -720,7 +785,46 @@ class InfiniteWorldsScraper:
             
         except Exception:
             return False
+        
+    def sort_story_pages(self, story_name):
+        """Sort and deduplicate pages in story JSON file by page_number"""
+        story_file = os.path.join(self.stories_folder, f"{story_name}.json")
+
+        if not os.path.exists(story_file):
+            print(f"No story file found for '{story_name}'")
+            return False
+
+        try:
+            with open(story_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            if "pages" not in data:
+                print("No 'pages' key found in story file.")
+                return False
+
+            # Use a dictionary to deduplicate by page_number
+            page_dict = {}
+            for page in data["pages"]:
+                number = page.get("page_number")
+                if number is not None:
+                    page_dict[number] = page  # Latest entry wins if duplicate
+
+            # Sort by page_number
+            sorted_pages = [page_dict[k] for k in sorted(page_dict.keys())]
+            data["pages"] = sorted_pages
+
+            with open(story_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+
+            print(f"Sorted and deduplicated pages in '{story_file}'")
+            return True
+
+        except Exception as e:
+            print(f"Error sorting and deduplicating story pages: {e}")
+            return False
+
 
 if __name__ == "__main__":
+    
     scraper = InfiniteWorldsScraper()
     scraper.run()
