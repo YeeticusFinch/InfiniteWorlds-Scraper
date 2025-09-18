@@ -2,6 +2,9 @@
 
 A Python Selenium project that scrapes stories from the Infinite Worlds app, automatically navigating through pages and saving content to JSON files with downloaded images.
 
+![image](https://github.com/user-attachments/assets/887b58d5-d118-42c0-86d7-d247b03bbd90)
+
+
 ## Features
 
 - **Story Management**: Select existing stories or create new ones
@@ -33,12 +36,16 @@ A Python Selenium project that scrapes stories from the Infinite Worlds app, aut
 
 Edit `config.json` to customize behavior:
 
-```json
+```
 {
-  "auto_continue": false,     // Auto-click "Next turn" or wait for user input
-  "wait_time": 3,            // Seconds to wait between page loads
-  "max_pages": 100,          // Maximum pages to scrape per session
-  "download_images": true    // Whether to download images
+  "auto_continue": true,        // Auto-click "Next turn" or wait for user input
+  "wait_time": 2,               // Seconds to wait between page loads
+  "max_pages": 300,             // Maximum pages to scrape per session
+  "download_images": true,      // Whether to download images
+  "max_image_swaps": 12,        // Maximum times it will press the "Swap image" button
+  "image_swap_wait": 0.5,       // Delay after clicking "Swap image"
+  "email": "example@gmail.com", // Login email
+  "password": "password"        // Login password
 }
 ```
 
@@ -119,8 +126,6 @@ If Brave isn't found automatically, you can manually set the path in the `find_b
 - Existing pages with the same page number will be updated rather than duplicated
 - The script respects the website by adding delays between requests
 - Images are downloaded with descriptive filenames based on page numbers
-
-## Safety Features
 
 - Maximum page limit to prevent infinite loops
 - Error handling for network issues and missing elements
