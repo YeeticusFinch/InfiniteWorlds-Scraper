@@ -651,6 +651,8 @@ def generate_tts():
         # Apply speed change if needed
         if speed and speed != 1.0:
             try:
+                story_audio_folder = os.path.abspath(os.path.join(AUDIO_FOLDER, story_name))
+                audio_path = os.path.abspath(os.path.join(story_audio_folder, audio_filename))
                 change_speed(audio_path, speed)
                 print(f"Applied speed change: {speed}")
             except Exception as speed_error:
@@ -757,12 +759,21 @@ def save_recording():
     except Exception as e:
         return jsonify({'error': f'Failed to save recording: {str(e)}'}), 500
     
-def change_speed(audio_path, speed=1.0):
-    tmp_path = audio_path + ".tmp.wav"
-    subprocess.run([
-        "sox", audio_path, tmp_path, "tempo", str(speed)
-    ], check=True)
-    os.replace(tmp_path, audio_path)
+def change_speed(file_path, speed):
+    import subprocess, os
+    import tempfile
+
+    temp_file = tempfile.mktemp(suffix=".wav")
+
+    # Quote paths for Windows safety
+    cmd = [
+        "ffmpeg", "-y", "-i", file_path,
+        "-filter:a", f"atempo={speed}",
+        temp_file
+    ]
+    subprocess.run(cmd, check=True)
+
+    os.replace(temp_file, file_path)
 
 @app.route('/api/delete-audio', methods=['POST'])
 def delete_audio():
