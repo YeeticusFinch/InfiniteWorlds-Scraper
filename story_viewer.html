@@ -11,6 +11,14 @@
         box-sizing: border-box;
       }
 
+      .paragraph-audio-controls button.insert-btn {
+        background: #38a169;
+      }
+
+      .paragraph-audio-controls button.insert-btn:hover {
+        background: #2f855a;
+      }
+
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -499,7 +507,7 @@
       }
 
       .audio-controls button {
-        background: rgba(255, 255, 255, 0.2);
+        background: linear-gradient(135deg, #667eea, #764ba2);
         border: 1px solid rgba(255, 255, 255, 0.3);
         color: white;
         padding: 8px 15px;
@@ -811,6 +819,16 @@
             </select>
           </div>
           <div class="form-group mt-2">
+            <button type="button" id="previewVoiceBtn" class="btn btn-info">
+              Preview Voice
+            </button>
+          </div>
+          <audio
+            id="voicePreviewPlayer"
+            controls
+            style="display: none; margin-top: 10px; width: 100%"
+          ></audio>
+          <div class="form-group mt-2">
             <label for="nicknameInput">Nickname (optional)</label>
             <div style="display: flex; gap: 5px">
               <input
@@ -819,8 +837,12 @@
                 class="form-control"
                 placeholder="Enter nickname"
               />
-              <button id="saveNicknameBtn" class="btn btn-secondary">
-                Save
+              <button
+                type="button"
+                id="saveNicknameBtn"
+                class="btn btn-secondary"
+              >
+                Save Nickname
               </button>
             </div>
           </div>
@@ -896,9 +918,70 @@
         }
       }*/
 
+      async function insertParagraphBelow(index) {
+        if (!currentStory || !currentStory.pages[currentPage]) return;
+
+        try {
+          const response = await fetch("/api/insert-paragraph", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              storyName: currentStory.story_name,
+              pageNumber: currentStory.pages[currentPage].page_number,
+              insertIndex: index + 1, // Insert after the current paragraph
+              paragraphText: "", // Empty paragraph
+            }),
+          });
+
+          if (response.ok) {
+            // Update local data
+            currentStory.pages[currentPage].text.splice(index + 1, 0, "");
+
+            // Shift audio indices that come after the insertion point
+            const audio = currentStory.pages[currentPage].audio || {};
+            const newAudio = {};
+
+            for (const [key, value] of Object.entries(audio)) {
+              const audioIndex = parseInt(key);
+              if (audioIndex > index) {
+                newAudio[audioIndex + 1] = value;
+              } else {
+                newAudio[key] = value;
+              }
+            }
+
+            currentStory.pages[currentPage].audio = newAudio;
+
+            // Re-render the page
+            renderCurrentPage();
+
+            // Focus on the new paragraph
+            setTimeout(() => {
+              const textareas = document.querySelectorAll(
+                ".paragraph textarea"
+              );
+              if (textareas[index + 1]) {
+                textareas[index + 1].focus();
+              }
+            }, 100);
+          } else {
+            alert("Error inserting paragraph");
+          }
+        } catch (error) {
+          console.error("Error inserting paragraph:", error);
+          alert("Error inserting paragraph");
+        }
+      }
+
       async function loadAvailableVoices() {
         try {
-          const response = await fetch("/api/voices");
+          // Pass the current story name so server can include nicknames
+          const storyParam = currentStory
+            ? `?storyName=${encodeURIComponent(currentStory.story_name)}`
+            : "";
+          const response = await fetch(`/api/voices${storyParam}`);
           availableVoices = await response.json();
         } catch (error) {
           console.error("Error loading voices:", error);
@@ -1015,27 +1098,28 @@
         container.innerHTML = paragraphs
           .map(
             (text, index) => `
-              <div class="paragraph">
-                  <div class="paragraph-audio-controls">
-                      ${
-                        audio && audio[index]
-                          ? `
-                          <button onclick="playParagraphAudio(${index})">▶ Play</button>
-                          <button class="delete" onclick="deleteParagraphAudio(${index})">🗑 Delete</button>
-                      `
-                          : `
-                          <button onclick="startRecording(${index})" id="record-btn-${index}">🎤 Record</button>
-                          <button onclick="openTTSModal(${index})">🔊 TTS</button>
-                      `
-                      }
-                  </div>
-                  <textarea
-                      placeholder="Enter paragraph text..."
-                      onchange="updateParagraph(${index}, this.value)"
-                      oninput="autoResize(this)"
-                  >${text}</textarea>
-              </div>
-          `
+        <div class="paragraph">
+            <div class="paragraph-audio-controls">
+                ${
+                  audio && audio[index]
+                    ? `
+                    <button onclick="playParagraphAudio(${index})">▶ Play</button>
+                    <button class="delete" onclick="deleteParagraphAudio(${index})">🗑 Delete</button>
+                `
+                    : `
+                    <button onclick="startRecording(${index})" id="record-btn-${index}">🎤 Record</button>
+                    <button onclick="openTTSModal(${index})">🔊 TTS</button>
+                `
+                }
+                <button onclick="insertParagraphBelow(${index})" class="insert-btn">+ Insert Below</button>
+            </div>
+            <textarea
+                placeholder="Enter paragraph text..."
+                onchange="updateParagraph(${index}, this.value)"
+                oninput="autoResize(this)"
+            >${text}</textarea>
+        </div>
+    `
           )
           .join("");
 
@@ -1121,6 +1205,9 @@
 
         document.getElementById("nicknameInput").value = "";
 
+        // Reload voices to get updated nicknames for this story
+        await loadAvailableVoices();
+
         // Wait for voices to be loaded
         /*
         if (!Array.isArray(availableModels)) {
@@ -1196,36 +1283,76 @@
       });
 
       document
+        .getElementById("previewVoiceBtn")
+        .addEventListener("click", async () => {
+          const voice = document.getElementById("voice-select").value; // ✅ correct id
+          if (!voice) {
+            alert("Please select a voice to preview.");
+            return;
+          }
+
+          try {
+            const response = await fetch("/api/preview-voice", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ voice: voice.split("[")[0].trim() }), // strip nickname if any
+            });
+
+            const result = await response.json();
+            if (result.url) {
+              const player = document.getElementById("voicePreviewPlayer");
+              player.src = result.url + "?t=" + Date.now(); // cache-bust
+              player.style.display = "block";
+              player.play();
+            } else {
+              alert("Preview failed: " + (result.error || "Unknown error"));
+            }
+          } catch (err) {
+            console.error(err);
+            alert("Error generating preview");
+          }
+        });
+
+      document
         .getElementById("saveNicknameBtn")
-        .addEventListener("click", function () {
-          const voice = document.getElementById("voiceSelect").value;
+        .addEventListener("click", async function () {
+          const voice = document.getElementById("voice-select").value;
           const nickname = document
             .getElementById("nicknameInput")
             .value.trim();
+
           if (!voice || !nickname) {
             alert("Please select a voice and enter a nickname.");
             return;
           }
 
-          fetch("/api/save-voice-nickname", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              storyName: currentStoryName, // <-- make sure you have this variable set
-              nickname: nickname,
-              voice: voice.split("[")[0].trim(), // strip nickname if already shown
-            }),
-          })
-            .then((r) => r.json())
-            .then((res) => {
-              if (res.success) {
-                alert("Nickname saved!");
-                // reload voices so dropdown shows new nickname
-                loadVoices();
-              } else {
-                alert("Error: " + (res.error || "Failed to save nickname"));
-              }
+          try {
+            const response = await fetch("/api/save-voice-nickname", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                storyName: currentStory.story_name,
+                nickname: nickname,
+                voice: voice.split("[")[0].trim(),
+              }),
             });
+
+            const res = await response.json();
+            if (res.success) {
+              alert("Nickname saved!");
+              // Reload voices and update dropdown immediately
+              await loadAvailableVoices();
+              const voiceSelect = document.getElementById("voice-select");
+              voiceSelect.innerHTML = availableVoices
+                .map((voice) => `<option value="${voice}">${voice}</option>`)
+                .join("");
+            } else {
+              alert("Error: " + (res.error || "Failed to save nickname"));
+            }
+          } catch (err) {
+            console.error("Error saving nickname:", err);
+            alert("Error saving nickname");
+          }
         });
 
       async function playParagraphAudio(paragraphIndex) {

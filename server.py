@@ -370,6 +370,57 @@ def get_voices():
 
     return jsonify(all_voices)
 
+@app.route('/api/insert-paragraph', methods=['POST'])
+def insert_paragraph():
+    """Insert a new paragraph at a specific position in a story page"""
+    data = request.json
+    story_name = data.get('storyName')
+    page_number = data.get('pageNumber')
+    insert_index = data.get('insertIndex')
+    paragraph_text = data.get('paragraphText', '')
+    
+    if not all([story_name, page_number is not None, insert_index is not None]):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    story_data = load_story_data(story_name)
+    if not story_data:
+        return jsonify({'error': 'Story not found'}), 404
+    
+    # Find the page
+    page = None
+    for p in story_data['pages']:
+        if p.get('page_number') == page_number:
+            page = p
+            break
+    
+    if not page:
+        return jsonify({'error': 'Page not found'}), 404
+    
+    # Ensure text array exists and is properly formatted
+    if 'text' not in page:
+        page['text'] = []
+    
+    page['text'] = parse_text_content(page['text'])
+    
+    # Insert the new paragraph at the specified index
+    page['text'].insert(insert_index, paragraph_text)
+    
+    # Shift audio indices that come after the insertion point
+    if 'audio' in page and page['audio']:
+        new_audio = {}
+        for key, value in page['audio'].items():
+            audio_index = int(key)
+            if audio_index >= insert_index:
+                new_audio[str(audio_index + 1)] = value
+            else:
+                new_audio[key] = value
+        page['audio'] = new_audio
+    
+    # Save the updated story
+    save_story_data(story_name, story_data)
+    
+    return jsonify({'success': True, 'insertedIndex': insert_index})
+
 @app.route('/api/stories')
 def get_stories():
     """Get list of all stories with metadata"""
@@ -426,11 +477,57 @@ def get_tts_models():
     
     return jsonify({'models': list(tts_models.keys())})
 
+@app.route('/api/preview-voice', methods=['POST'])
+def preview_voice():
+    if not TTS_AVAILABLE:
+        return jsonify({'error': 'TTS not available'}), 400
+    
+    data = request.json
+    voice = data.get('voice')
+    model_name, speaker = None, None
+    
+    print("Previewing voice")
+    
+    if voice and ":" in voice:
+        model_name, speaker = voice.split(":", 1)
+    else:
+        model_name = voice
+
+    try:
+        global current_tts
+        if current_tts is None or current_tts.model_name != model_name:
+            current_tts = TTS(model_name)
+            current_tts.model_name = model_name
+
+        preview_folder = os.path.join(AUDIO_FOLDER, "previews")
+        os.makedirs(preview_folder, exist_ok=True)
+        
+        filename = f"preview_{uuid.uuid4().hex[:8]}.wav"
+        filepath = os.path.join(preview_folder, filename)
+
+        kwargs = {}
+        voices = tts_models.get(model_name, ["default"])
+        if speaker and speaker in voices and not (len(voices) == 1 and voices[0] == "default"):
+            kwargs["speaker"] = speaker
+
+        current_tts.tts_to_file(text="Hello world", file_path=filepath, **kwargs)
+
+        return jsonify({"url": f"/audio/previews/{filename}"})
+    except Exception as e:
+        return jsonify({'error': f'Preview generation failed: {str(e)}'}), 500
+    
+@app.route('/audio/previews/<filename>')
+def serve_preview(filename):
+    preview_folder = os.path.join(AUDIO_FOLDER, "previews")
+    return send_from_directory(preview_folder, filename)
+
 @app.route('/api/generate-tts', methods=['POST'])
 def generate_tts():
     """Generate TTS audio for a paragraph"""
     if not TTS_AVAILABLE:
         return jsonify({'error': 'TTS not available'}), 400
+
+    print("Generating TTS")
 
     data = request.json
     story_name = data.get('storyName')
@@ -582,6 +679,8 @@ def save_voice_nickname():
     story_name = data.get("storyName")
     nickname = data.get("nickname")
     voice = data.get("voice")  # "model:speaker"
+    
+    print("Saving nickname")
 
     if not all([story_name, nickname, voice]):
         return jsonify({"error": "Missing required fields"}), 400
